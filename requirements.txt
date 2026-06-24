@@ -1,0 +1,23 @@
+# Pinned to match the Adaptive Stacking reference repo
+# (github.com/geraudnt/adaptive-stacking). Python 3.10.
+# Torch is installed separately from the CUDA index — see install command.
+
+# === AS-repo pins (DO NOT change without a reason) ===
+gymnasium==1.2.3
+gymnasium-robotics==1.4.1
+minigrid==3.0.0
+stable_baselines3==2.7.1
+sb3_contrib==2.7.1
+tensorboard==2.20.0
+numpy==1.24.3
+matplotlib==3.7.5
+opencv-python==4.10.0.84
+imageio==2.35.0
+imageio-ffmpeg==0.5.1
+
+# === finance/research additions (not in AS repo) ===
+pandas>=2.0,<2.3
+yfinance>=0.2.40
+scipy>=1.10
+pyyaml>=6.0
+tqdm>=4.66
