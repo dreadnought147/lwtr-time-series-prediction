@@ -1,0 +1,160 @@
+
+
+NOTE TO LLM MAKING SLIDES:
+This is week 2. Same vibe as week 1 — nerdy, humorous, passionate, excited, colorful. Honest about what I do and don't know. Don't overstate. The proposal is being handed in today (2026-05-18). The literature review went in in April, the annotated bibliography in March. Most of this week's energy was spent locking in the proposal and reasoning about the dataset choice. I still haven't built the gymnasium — be direct about that. Slides should let the supervisor (and me) walk away knowing what changed since week 1 and exactly what is still in pieces on the workbench. Two things I REALLY want to come through: (1) the *reasoning* behind why VIX-as-observation + S&P-as-underlying is the right setup (it's not arbitrary, and the reasoning matters more than the dataset itself), and (2) the AI-was-strong-in-games-but-failed-in-the-real-world parallel — Adaptive Stacking lives in that exact moment for memory mechanisms.
+
+---
+
+**Slide 1 — What changed since week 1**
+
+Week 1 slides said: VIX only, predict direction (+1/-1), three agents, ±1 reward, supervisor questions at the end. That was the scrappy version.
+
+The proposal that's getting handed in today is wider and tighter at the same time:
+- Observation stream: VIX (unchanged)
+- What the agent actually does: take a *position* on the S&P 500, not predict a number
+- Action set: {short, flat, long} = {-1, 0, +1}
+- Reward: position × next-day S&P return − transaction cost on flips
+- Four configurations, not three (supervised LSTM baseline is now first-class)
+- Stack sizes swept: k ∈ {3, 5, 10, 20}
+- Walk-forward evaluation, not single-shot
+- Metrics: cumulative return, Sharpe, max drawdown — not just cumulative reward
+
+The skeleton of week 1 is still there. The body around it is new.
+
+---
+
+**Slide 2 — Why VIX + S&P 500, and not the things I originally wanted**
+
+The honest version of the dataset reasoning. I went through three candidates:
+
+1. **T-bills + S&P 500.** Moody and Saffell's original setup. Tempting because it's the canonical financial-RL paper and the comparison would be easy. But T-bills don't carry the memory structure my thesis actually needs. They drift, they don't *encode regime*.
+
+2. **VIX-only, predict next VIX.** Clean, single series. The problem is that pure forecasting has no sequential consequence — a wrong call at t doesn't change my situation at t+1. So the supervised baseline would trivially be at least as good, and the RL framing earns nothing. Adaptive Stacking has nothing to prove there.
+
+3. **VIX as observation, S&P 500 as the underlying for positions.** This is what landed in the proposal. The reason: VIX has memory baked into its construction. It reflects the decay tail of crashes that happened weeks or months ago. A spike from a Fed announcement six weeks back still shapes today's level. That is *exactly* the sparse-signal-in-noisy-history pattern Adaptive Stacking is built for — most days the VIX print is noise, a few historic days are the entire story.
+
+Picking VIX is therefore not a dataset preference. It's the most structurally honest test of the central assumption Adaptive Stacking depends on (κ ≪ k*). If sparsity holds anywhere in finance, it holds here.
+
+---
+
+**Slide 3 — The research question, framed in one sentence**
+
+Adaptive Stacking works in T-Maze, MiniGrid-Memory, Rubik's Cube, FetchReach. Those are stationary, episodic, sparse-reward, well-defined-informative-observation environments. Financial markets are *none* of those things. They are non-stationary, continuous, dense-reward, and the informative observations are often diffuse rather than concentrated.
+
+So the research question is: **does the memory-action mechanism that works in those controlled benchmarks transfer to noisy, non-stationary financial time-series?**
+
+This is the same story that played out for AI more broadly. Game AI looked unbeatable on chess and Go and Atari — fully observable, well-defined, controlled. The same systems struggled the moment they walked into partially observable real-world settings. Adaptive Stacking is at the same crossroads, but specifically for *memory*. It has been validated in the controlled half of the world. Whether it survives the messy half is the open question. That's what I'm here to find out.
+
+---
+
+**Slide 4 — Three research questions, stacked on top of each other**
+
+The comparison is a three-step staircase. Each step changes one variable. The result of step n sets up step n+1.
+
+**RQ1 — Does RL beat supervised on this task at all?**
+LSTM forecaster + threshold rule vs. memoryless PPO. If supervised wins here, the sequential framing of RL is adding nothing on this dataset, and that's a publishable finding in its own right.
+
+**RQ2 — Does fixed memory beat no memory?**
+Memoryless PPO vs. PPO + Frame Stacking, k ∈ {3, 5, 10, 20}. Sanity check. Prior work already says yes for partially observable tasks. Replicating it on financial data is a floor.
+
+**RQ3 — Does *learned* memory beat *fixed* memory at matched memory budget?**
+Frame Stacking at k vs. Adaptive Stacking at κ = k, for each k in the sweep. **This is the primary contribution.** Same comparison Nangue Tasse et al. ran on T-Maze, now run on a non-stationary financial stream where the sparsity assumption is far less obvious.
+
+---
+
+**Slide 5 — The four configurations on one slide**
+
+| # | Configuration            | What it observes               | Memory mechanism                  | Answers   |
+|---|--------------------------|--------------------------------|-----------------------------------|-----------|
+| 1 | Supervised (LSTM)        | VIX history → forecast S&P     | Hidden state (truncated BPTT)     | RQ1       |
+| 2 | PPO no-memory            | Current VIX only               | None (Frame Stacking with k=1)    | RQ1, RQ2  |
+| 3 | PPO + Frame Stacking     | Last k VIX values, FIFO        | Passive sliding window            | RQ2, RQ3  |
+| 4 | PPO + Adaptive Stacking  | κ slots, agent chooses what    | Learned memory action             | RQ3       |
+
+Same PPO base for configurations 2–4. Same network widths. Same hyperparameters. The only variable that moves between Frame Stacking and Adaptive Stacking is *who decides what to remember*. That's the whole point.
+
+Buy-and-hold gets reported alongside, as a financial sanity baseline. If a trained agent can't beat doing nothing, the agent hasn't earned its keep regardless of how the memory comparison turns out.
+
+---
+
+**Slide 6 — The interaction loop, plain English**
+
+Every day:
+1. The environment hands the agent today's VIX (and, for the stacked agents, some history).
+2. The agent picks a position for tomorrow: short, flat, or long S&P 500.
+3. Tomorrow happens. S&P 500 moves by some return r.
+4. The agent gets reward = position × r, minus a small transaction cost if it just flipped from yesterday's position.
+5. Repeat.
+
+Over time, the agent learns to map "what the volatility regime looks like (and how it's looked lately)" to "what side of the market to be on." If Adaptive Stacking is doing what it claims, the slots it keeps should cluster around VIX spikes and regime transitions — not be uniformly spread across the trailing window.
+
+That last bit is a diagnostic I plan to actually look at, not just claim.
+
+---
+
+**Slide 7 — What's actually done, and what's not (honest pile)**
+
+Done:
+- Annotated bibliography (March)
+- Literature review (April, submitted)
+- Proposal (today)
+- Project skeleton: Python venv, PyTorch with CUDA on the GTX 1660 Ti, VS Code config — the boilerplate stuff is in
+- Conceptual understanding of all three memory mechanisms and the supervised baseline
+
+Not done (saying this directly):
+- The Gymnasium environment is **not built yet**. I have not wrapped VIX+S&P into a step/reset/observation_space class. I know what it needs to look like; I haven't written it.
+- No PPO agent has been trained on anything yet
+- No supervised forecaster has been trained yet
+- No walk-forward scaffolding
+- Reference implementation from github.com/geraudnt/adaptive-stacking has been *read*, not yet *integrated*
+
+The proposal workplan has the May target as: data pipeline + environment scaffolded + supervised baseline scaffolded. I'm on the early side of that target, not the late side. June is when the first real training runs are scheduled.
+
+---
+
+**Slide 8 — Risks I already named in the proposal**
+
+Three things that could go wrong, ranked by how worried I should be:
+
+1. **The sparsity assumption (κ ≪ k*) may not hold in financial data.** Adaptive Stacking's efficiency argument depends on the relevant past being *concentrated*. Financial signals are often *diffuse* — many marginally informative observations, not a few decisive ones. If that's the case here, AS may not beat Frame Stacking at any κ. That would be a *negative* result. A negative result is still a contribution — it tells the next person not to try this — but it's the result I want to be most honest about ahead of time.
+
+2. **The convergence theorem for Adaptive Stacking assumes a stationary k*-Markov environment.** Financial returns are not stationary. Walk-forward retraining is a partial mitigation, not a fix. I'm not going to claim theoretical guarantees in this setting. The empirical comparison has to stand on its own.
+
+3. **Compute.** Four stack sizes × two memory mechanisms × multiple seeds × walk-forward windows is a lot of training. Contingency in the proposal: drop seed count from 5 → 3 first, then trim the sweep grid from {3,5,10,20} → {3,10,20}. Keep the *comparison structure* intact at the cost of statistical confidence on each data point.
+
+---
+
+**Slide 9 — Workplan for the rest of the year**
+
+| Month     | What                                                                          |
+|-----------|-------------------------------------------------------------------------------|
+| May       | Proposal in. Data pipeline + env scaffolding + supervised baseline (current). |
+| June      | No-memory PPO trained. RQ1 reported.                                          |
+| July      | Frame Stacking sweep over k ∈ {3, 5, 10, 20}. RQ2 reported.                   |
+| August    | Adaptive Stacking sweep at matched κ. RQ3 reported. Retention diagnostic.     |
+| September | Walk-forward evaluation across the test segment. Draft of full report.        |
+| October   | Revisions. Submission.                                                        |
+
+The contribution lives in August. Everything before that exists so August is a clean comparison.
+
+---
+
+**Slide 10 — Open questions for the supervisor**
+
+The week 1 dataset question is now answered (VIX + S&P 500, with reasoning above). The next layer of questions:
+
+- The agent observes VIX. Should it *also* observe its own previous S&P return as a feature, or does that collapse the regime-from-VIX framing into something messier?
+- Action set: discrete {-1, 0, +1} is what's in the proposal. Is continuous position sizing in [-1, 1] preferred for the financial side of the comparison, or would that muddy the memory-mechanism comparison by introducing another moving variable?
+- For the supervised baseline (RQ1), LSTM forecasts next-day return → threshold to position. Is that the right framing of "fair supervised baseline," or should it forecast position directly via a classifier?
+- Walk-forward window size — I haven't picked one yet. Is there a standard the supervisor expects (e.g., 1-year train / 3-month test rolling)?
+- If RQ3 lands negative — Adaptive Stacking fails to transfer — is reporting that as the result acceptable, or is there pressure for a positive headline?
+
+---
+
+**Slide 11 — One-sentence version, for the supervisor's notebook**
+
+This research takes a memory mechanism that works in controlled, episodic, fully-understood RL benchmarks and asks whether it survives contact with the kind of noisy, non-stationary, real-world signal that defeated game-trained AI when it stepped out of the arcade.
+
+That's it. That's the whole thing.
+
+---

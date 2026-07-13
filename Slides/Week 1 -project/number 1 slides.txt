@@ -1,0 +1,100 @@
+
+
+**Slide 1 — The Research Question**
+
+Three-way comparison:
+- Memoryless RL vs Supervised Learning — does RL itself add value?
+- RL with Frame Stacking vs Memoryless RL — does memory help?
+- RL with Adaptive Stacking vs RL with Frame Stacking — does *learned* memory beat *fixed* memory?
+
+Core hypothesis: an agent that learns what to remember will outperform one that only remembers the most recent observations.
+
+---
+
+**Slide 2 — Why This Matters**
+
+Most RL memory research uses game environments (Atari). Financial time-series is non-Markovian by nature — the correct prediction at time t depends on events that happened further back than any fixed window can see. This makes it a natural and underexplored testbed for adaptive memory mechanisms.
+
+---
+
+**Slide 3 — Data Choice and Justification**
+
+Chosen series: VIX (CBOE Volatility Index).
+
+What it is: a daily measure of expected market volatility derived from S&P 500 options prices. High VIX = fearful market. Low VIX = calm market.
+
+Why VIX specifically:
+- explain vix in a non technical mnnaer in tehse slides the supervisor cares not for our dataset
+- Exhibits clear regime-dependent, mean-reverting behaviour
+- Well-documented memory structure — spikes decay over days in patterns that depend on the spike's cause and magnitude
+- Non-Markovian by nature — recent observation alone is insufficient to predict next move
+- Single series keeps the experiment clean and the research question isolated
+
+Observation representation: log returns of VIX, not raw price. Returns are stationary and scale-invariant — standard practice in quantitative finance.
+
+---
+
+**Slide 4 — What the Agent Does**
+
+The environment presents one VIX log-return (explain what this is for a non financial audience please) observation per timestep. The agent predicts direction: up (+1) or down (-1). Reward is +1 for correct prediction, -1 for incorrect. The agent learns a policy that maximises cumulative reward — which means it learns to predict better over time.
+
+This is a prediction task framed as a sequential decision problem.
+
+---
+
+**Slide 5 — The Three Agents**
+
+Agent 1 — Memoryless RL: receives only the current observation. No history. Baseline for whether RL adds anything at all over random.
+
+Agent 2 — Frame Stacking RL: receives the last k observations as a flat vector. Fixed sliding window — oldest observation drops off as new one arrives. Memory is fixed, not learned. This is the standard approach (what DQN used for Atari).
+
+Agent 3 — Adaptive Stacking RL: receives k observations but chooses which slot to overwrite at each step. Memory is a learned decision. Based on Nangue Tasse et al. (2025). Both the prediction action and the memory action are learned through the same reward signal.
+
+---
+
+**Slide 6 — Key Assumption Being Tested**
+
+VIX log-returns are k*-order Markovian — meaning there exists some minimum history length k* beyond which additional history adds no predictive value. The claim is that adaptive stacking can achieve performance equivalent to an agent with full access to that history, using a smaller memory budget, by learning to keep the right observations rather than just the most recent ones.
+
+This is the theoretical guarantee from the Nangue Tasse et al. paper.
+
+---
+
+**Slide 7 — Implementation Plan**
+
+Four sequential steps:
+- why ar ewe using PPO,well because it sthe one that he used in hs paper 
+1. Build custom Gymnasium environment wrapping VIX log-return data
+2. Train and evaluate memoryless PPO agent
+3. Train and evaluate Frame Stacking PPO agent across window sizes
+4. Integrate Adaptive Stacking from reference implementation and compare
+
+Reference codebase: github.com/geraudnt/adaptive-stacking
+
+Algorithm: PPO throughout all three agents for fair comparison. Same algorithm, different memory mechanisms.
+
+---
+
+**Slide 8 — Current Status and Open Questions for Supervisor**
+
+Done so far:
+- Research question defined and scoped
+- Data choice justified but im yet to do more research on it(VIX, log returns, daily frequency)
+- Three-agent experimental design structured
+- Development environment set up (VS Code, Python venv, PyTorch with CUDA on GTX 1660 Ti)
+- Conceptual understanding of all three memory mechanisms established
+
+Not yet done: any training runs. No results yet.
+
+Open questions needing supervisor input:
+- Is VIX an acceptable dataset or does the supervisor prefer a different series?
+- Is the prediction task framing (direction, ±1 reward) appropriate or should reward be continuous (e.g. proportional to magnitude of correct prediction)?
+- Should the supervised learning baseline be included in the final evaluation or is the three-way RL comparison sufficient?
+- Are there evaluation metrics beyond cumulative reward the supervisor expects — Sharpe ratio, accuracy, directional accuracy?
+---
+
+If results don't show adaptive stacking winning — is a negative result acceptable as a contribution?
+
+"NOTE TO LLM MAKING LSIDES: 
+I want these slides to be honest. I don't want them to overstate stuff that I don't know. One thing I remember about this project is him simply mentioning that we're just testing memory and stuff like that. I haven't really done a lot of research on how to set up a gymnasium, and I want to be direct about that. Yeah, I wanna be really direct. I don't know how to set up all this stuff, but I am in the process of doing it. I have configured my project structure. I did read something up on data science, basically indicating that, you know, the model is only as good as the data that you give it. And I know it's not really the focus of the project, but just for passion purposes, I want my data to be as good as possible for now, but I will try to make sure that I don't get stuck facing it the entire time. And I need more information on the data to someone who's never seen what I'm watching. They don't even need to understand markets and market movements. What I do want you to hit upon is the Markovian nature of the IX. You say that there is a Markovian aspect to it. We keep memory and it's essentially like regime ended. So because of previous, I don't know exactly how to regime depending on if you know more than me, but explain that. So these slides should actually let me know something and the lecturer something so that I can probably give it back to them. Also, I like how it's like two, you say that most RL memory researchers use games, right? And we've seen in the adaptive stacking paper that adaptive stacking works for very, for almost defined environments, you know. It's the same problem, it's the same phenomenon where AI was highly studied in game AI or board game AI, but then it started failing in a lot of partially observable environments because we're training our AI to essentially work on fully observable states, but the world isn't like that. So I want to slide you to play around that field, but not too thick and not too heavy. Also, I'd like a lot of colors. I want the slides to feel nerdy and humorous and very passionate and excited.
+"
