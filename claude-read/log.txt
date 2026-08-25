@@ -1,0 +1,265 @@
+===========================================================
+2026-08-20 — walk-forward sizing + PPO training-length recap
+===========================================================
+
+What "walk-forward" means (so the recap makes sense):
+- Walk-forward = train on a past chunk, test on the chunk right after,
+  slide forward, repeat. Better than a single train/test split because
+  markets shift over time (2001 regime ≠ 2020 regime).
+- "Window sizing" = how long the train chunk is vs the test chunk.
+  I was planning 5 years train / 1 year test.
+- "Sanity band" = the range of choices published practice treats as
+  reasonable. Not a rule, but if you sit outside it, you owe a reason.
+
+What the search told me about window sizing:
+- Published practice: train chunk is 2× to 5× longer than test chunk.
+  My 5:1 sits at the upper end — safe, slightly cautious.
+- Non-overlapping test slices (slide by exactly one test length) is
+  called "cleanest setup" — matches my plan.
+- Rule of thumb: at least 6–8 windows for statistical reliability,
+  ideally 12–20. My setup gives ~31 windows. Well inside.
+- Also: ≥30 trades per test window for the numbers to mean anything.
+  Daily strategy × 252 test days = 252 trades. Fine.
+
+What the search told me about how long to train PPO:
+- No hard literature number for "min timesteps per window."
+- PPO is known to be stable under non-stationarity because of its
+  "trust region" — a math constraint that stops each policy update
+  from moving too far. Good news for my setup.
+- My planned 200,000 steps per window is roughly 158 full passes
+  over each 1,260-day train chunk — probably overkill for early runs.
+
+What actually changed in the code:
+- walk_forward.py: no structural change. Added a comment saying the
+  sanity band is 2–5:1 train:test ratio and ≥6–8 windows, so future-me
+  knows what range to stay in.
+- Training configs: shipped with total_timesteps: 50000 for first-pass
+  smoke, YAML-exposed so I can bump to 200k for production later.
+- Nothing new goes in CLAUDE.md's "Concerns Bubbled Up" section — my
+  choices sit inside published bands.
+
+Sources:
+- https://blog.quantinsti.com/walk-forward-optimization-introduction/
+- https://stratbase.ai/en/blog/walk-forward-analysis-guide
+- https://arxiv.org/pdf/2503.01468  (Evidential PPO under non-stationarity)
+- https://openreview.net/pdf?id=in_RVSTqYxK  (Generalized PPO with sample reuse)
+
+
+===========================================================
+2026-08-20 — new summary.json format (per-window rich record)
+===========================================================
+
+Restructured scripts/train.py to emit a MUCH richer JSON per run — not
+just aggregate metrics, but per-window full records so we can re-analyse
+without re-training.
+
+What the new summary.json holds per window:
+- dates: real start/end for train + test slices
+- sizes: day counts
+- training: total_timesteps + wall_seconds
+- agent_test:
+    metrics (Sharpe/cumret/maxDD)
+    positions (n_long/n_flat/n_short/n_flips)
+    per_step_rewards (full array — 50 or 252 floats)
+    memory_action_counts (AS only — histogram of slot picks)
+- buy_and_hold_test:
+    metrics (same triplet)
+    per_step_returns (raw asset returns for the same test slice)
+
+Top-level:
+- data_dates_full: start/end/n of the whole aligned dataset
+- config: the exact YAML that produced this run (self-documenting)
+- per_window: list of all windows
+- aggregate:
+    mean ± std of agent metrics across windows
+    mean ± std of B&H metrics across windows
+    agent_positions_total (summed across windows)
+    agent_memory_action_counts_total (AS only)
+
+Console output also gained per-window L/F/S/flips counts and, for AS,
+the slot-overwrite histogram.
+
+Design principle: descriptive but not fat. Nested by concept (dates,
+sizes, training, agent_test, buy_and_hold_test) so future-me finds
+things without scrolling.
+
+Also updated src/data/transforms.py to return (obs, rets, dates) — the
+date index is needed so per-window records can carry real trading dates.
+
+Companion decision (still pending user confirmation):
+- Emit ALSO windows.csv and steps.csv per run, so many-run comparisons
+  are one pd.concat away. JSON = narrative; CSVs = tidy analysis dataset.
+
+
+===========================================================
+2026-08-20 — cluster-friendly CSV + JSON outputs, resume support
+===========================================================
+
+Each run now writes 3 files to results/{run_name}/:
+
+  windows.csv    one row per completed window. Flat, tidy, pandas-friendly.
+                 Columns include window_index, dates, sizes, timing,
+                 agent Sharpe/cumret/maxDD, B&H Sharpe/cumret/maxDD,
+                 position counts (long/flat/short/flips), and per-slot
+                 memory overwrite counts (empty for FS, filled for AS).
+
+  steps.csv      one row per (window, day). Columns: window_index, step,
+                 date, reward, position, memory_action (empty for FS).
+                 For per-step analysis / plots.
+
+  summary.json   nested narrative record. Written atomically (.tmp → rename)
+                 so no half-written JSON exists during a crash.
+
+Cluster-friendliness design:
+
+- CSVs are flushed after every window completes. If the process dies mid-run,
+  the CSV is valid up to the last completed window — never corrupt.
+- On startup, the script reads existing windows.csv to determine which
+  windows were completed and skips them. Continues from where it left off.
+- Schema check on resume: if the header of the existing CSV doesn't match
+  what this run's config expects, the script fails loudly rather than
+  silently drifting. Force a fresh start by deleting the results dir.
+- summary.json is written to summary.json.tmp then renamed atomically at
+  the end of the run. Robust on both Windows and POSIX filesystems.
+- The rich per-window JSON records are reconstructed from windows.csv on
+  resume, so summary.json reflects the WHOLE run, not just the newly-
+  completed windows.
+
+Why both formats coexist:
+- JSON = human-readable narrative, self-documenting (config embedded),
+  useful for onboarding / debugging a single run.
+- CSVs = tidy analysis dataset. pd.concat across many runs = one dataframe,
+  one groupby, one plot. That's the workflow when we do RQ2 comparisons.
+
+
+===========================================================
+2026-08-20 — why the AS agent is FORCED to overwrite each step,
+             and what "learning signal" even means in RL
+===========================================================
+
+Q: Why can't the AS agent choose to NOT overwrite anything on some
+   steps? Why the strict contract "you must overwrite one slot per step"?
+
+A short version I gave earlier:
+- The paper's design forces the agent to always spend its memory action.
+  It makes the tradeoff explicit — "something must be evicted, choose
+  wisely." Removing that pressure removes the learning signal.
+- Implementable to allow skip: add a (k+1)th "skip" slot to the memory
+  head so the action space becomes MultiDiscrete([3, k+1]).
+- On the 3×5 math: it counts joint outcomes. Each step the agent picks
+  one trade (3 options) and one slot (5 options). PPO has two heads
+  that pick each independently, but the joint action space is 3×5 = 15
+  unique (trade, slot) pairs.
+
+Now the longer version, in simple English:
+
+What is a "learning signal" in RL, and why do we need one?
+- RL agents only learn from ONE thing: reward. That's it.
+- If two different actions produce the same reward, the agent has no
+  reason to prefer one over the other. Its policy just wanders.
+- A "learning signal" is any pattern that creates reward differences
+  between the choices the agent can make. Those differences are what
+  gradient descent chews on to adjust the policy.
+- The bigger and more consistent the reward difference between good
+  and bad actions, the faster the agent learns.
+
+Common types of learning signals in RL:
+- Sparse rewards: reward only at the end of an episode (e.g. +1 for
+  winning, 0 otherwise). Hard to learn from; the agent has to figure
+  out which of thousands of past actions helped.
+- Dense rewards: a small reward every step (e.g. our setup — daily PnL).
+  Easier to learn from because the agent sees signal all the time.
+- Shaped rewards: engineered extra terms nudging the agent toward good
+  behaviour (e.g. penalising energy use in robotics). Can help, but
+  also can accidentally teach the wrong thing.
+- Intrinsic rewards: curiosity or novelty (see Demir's paper in the
+  lit review — memory management driven by "how new is this obs?").
+  A layer of learning signal on top of the environment's reward.
+
+Why forcing overwrite creates a learning signal (for the memory head):
+- Imagine the agent COULD skip. Skipping keeps every slot untouched.
+  Reward-wise, skipping is basically zero-risk — nothing gets lost.
+  The trading head still works; the memory head learns... nothing.
+  Because "skip" always looks equally safe, the policy collapses to
+  "always skip."
+- Force the overwrite: now every step, the agent MUST throw away one
+  slot. Different throw-away choices lead to different future stacks,
+  which lead to different observations, which change the trading head's
+  future decisions, which change future rewards.
+- Those reward differences ARE the learning signal for the memory head.
+- No pressure → no signal → no learning.
+
+Broader lesson (worth remembering for the write-up):
+- Every action head in an RL agent needs its OWN learning signal.
+- Sometimes the signal is trivial (trading head — position × return is
+  obvious signal). Sometimes the signal is subtle (memory head — the
+  reward payoff of "which slot I chose" only shows up steps later).
+- Good RL design = making sure every learnable choice has a reward
+  consequence that can eventually be traced back to that choice.
+
+
+===========================================================
+What's Next — 25 August 2026 (rescope check)
+===========================================================
+
+Where we stand:
+- Data pipeline, env, FS wrapper, AS wrapper, walk-forward, metrics,
+  config-driven train.py, CSV+JSON outputs, resume: all in.
+- Single-seed single-k runs done for rq2_fs_k5_seed0 and rq2_as_k5_seed0
+  (2026-08-24). Aggregate data point exists — AS edged FS on Sharpe,
+  retention histogram non-uniform. Directional, not conclusive.
+- Nothing for RQ1 in the walk-forward frame yet.
+
+Rescope check against scopedinrqs.md:
+- RQ1 (paradigm — LSTM vs PPO+FS): NOT yet answerable in code. The
+  LSTM baseline exists in src/baselines/lstm.py but has never run
+  inside the walk-forward + metrics + CSV/JSON pipeline. train.py
+  only handles PPO variants.
+- RQ2 (mechanism — AS vs FS at matched budget): infrastructure ready,
+  first data point exists at k=5 seed=0. Real answer needs the full
+  matched-budget grid (k in {3, 5, 10, 20}) × multiple seeds.
+- Approach still holds. Architecture, evaluation protocol, data
+  handling all match what scopedinrqs.md commits to. No pivot needed.
+- Open concerns from CLAUDE.md sec 7 still open: dataset span,
+  LSTM baseline fairness, memory interface (partially addressed via
+  build_memory_wrapper), retention diagnostic consumer.
+
+Next scoped work (priority order):
+
+1. LSTM in the walk-forward frame — the RQ1 blocker.
+   - Create scripts/train_lstm.py (parallel to train.py, same config
+     schema, same walk-forward + CSV/JSON output shape).
+     Reason for a separate script rather than a train.py branch:
+     LSTM is supervised, not RL. Different training paradigm.
+     Bloating train.py hides that difference.
+   - Write configs/rq1_lstm_seed0.yaml — same walk-forward as the
+     rq2 configs so results sit next to each other in aggregation.
+   - Run it locally (LSTM is fast, ~10 min total).
+   - First RQ1 data point exists.
+
+2. Retention diagnostic consumer.
+   - src/evaluation/retention.py — reads windows.csv from any AS run,
+     produces per-slot histogram and any temporal patterns.
+   - The retention slot counts already surprised us at k=5 seed=0
+     ([779, 1264, 2141, 1625, 2003]). Systematising this is what
+     turns the surprise into a reportable figure.
+
+3. Multi-seed / multi-k sweep configs.
+   - Small script that generates all the YAMLs (k in {3, 5, 10, 20}
+     x seeds in {0, 1, 2, 3, 4} x {fs, as} = 40 configs) from a
+     template. Avoids hand-writing 40 files.
+   - Dispatch to Wits mscluster via SLURM. Each config is one job.
+   - This is the real RQ2 answer.
+
+4. LSTM fairness pass.
+   - Small HP sweep (hidden size, seq length, learning rate).
+   - Multiple seeds reported with spread.
+   - This is what makes RQ1 defensible in the write-up.
+
+Working assumption: (1) and (2) are local box work this week. (3) is
+cluster dispatch as soon as (1) confirms the RQ1 shape is right.
+(4) can be done in parallel with (3) since it's small and CPU-only.
+
+
+
+

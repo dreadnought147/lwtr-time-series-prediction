@@ -1,0 +1,33 @@
+# RQ2 config: PPO + Frame Stacking, k=5, seed=0.
+# Run: python scripts/train.py --config configs/rq2_fs_k5_seed0.yaml
+#
+# Matched-budget pair with configs/rq2_as_k5_seed0.yaml — everything else
+# identical, only memory.type differs. That's what makes the RQ2 comparison
+# honest.
+
+seed: 0
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close      # log-return of this column feeds the agent
+  asset_col: sp_close             # position × next-day return of this column = reward
+
+env:
+  transaction_cost: 0.0001        # 1 basis point per unit of position change
+
+memory:
+  type: fs                        # "none" | "fs" | "as"
+  k: 5                            # window size = memory budget
+
+ppo:
+  total_timesteps: 100000          # smoke-friendly default; bump to 200000 for production runs
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260                # ~5 trading years
+  test_size: 252                  # ~1 trading year
+  max_windows: null               # null = use all windows that fit

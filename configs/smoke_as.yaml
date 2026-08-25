@@ -1,0 +1,33 @@
+# SMOKE config: PPO + Adaptive Stacking, tiny scale — pipeline-only test.
+# Run: python scripts/train.py --config configs/smoke_as.yaml
+#
+# Purpose: prove the AS wrapper (MultiDiscrete action space, learned memory
+# slot selection) handshakes with SB3 PPO end-to-end. Same tiny scale as
+# smoke_fs.yaml so any difference in behaviour is attributable to the wrapper.
+
+seed: 0
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+memory:
+  type: as
+  k: 5
+
+ppo:
+  total_timesteps: 2000
+  n_steps: 256
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 200
+  test_size: 50
+  max_windows: 2

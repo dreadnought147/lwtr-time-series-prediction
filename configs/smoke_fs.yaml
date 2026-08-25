@@ -1,0 +1,33 @@
+# SMOKE config: PPO + Frame Stacking, tiny scale — pipeline-only test.
+# Run: python scripts/train.py --config configs/smoke_fs.yaml
+#
+# Purpose: prove the full pipeline handshakes end-to-end without waiting an
+# hour if something breaks. Numbers produced here are meaningless — the point
+# is that no exception is raised and a summary.json lands in results/smoke_fs/.
+
+seed: 0
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+memory:
+  type: fs
+  k: 5
+
+ppo:
+  total_timesteps: 2000           # tiny — enough to prove training runs, not to learn anything
+  n_steps: 256
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 200                 # ~10 months of data — small on purpose
+  test_size: 50                   # ~2 months
+  max_windows: 2                  # 2 windows total, keep it snappy

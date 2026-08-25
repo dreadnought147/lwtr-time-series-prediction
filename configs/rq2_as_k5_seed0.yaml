@@ -1,0 +1,33 @@
+# RQ2 config: PPO + Adaptive Stacking, k=5, seed=0.
+# Run: python scripts/train.py --config configs/rq2_as_k5_seed0.yaml
+#
+# Matched-budget pair with configs/rq2_fs_k5_seed0.yaml — everything else
+# identical, only memory.type differs. That's what makes the RQ2 comparison
+# honest.
+
+seed: 0
+device: cpu
+ 
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+memory:
+  type: as                        # Adaptive Stacking — agent chooses which slot to overwrite
+  k: 5                            # memory budget κ, matched to the FS window
+
+ppo:
+  total_timesteps: 100000
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260
+  test_size: 252
+  max_windows: null
