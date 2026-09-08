@@ -1,0 +1,36 @@
+# RQ2 sweep — PPO + Adaptive Stacking, κ ∈ {3, 5, 10, 20}, 7 seeds each.
+# Run: python scripts/train.py --config configs/rq_rl_as_sweep.yaml
+#
+# Matched-budget pair with configs/rq_rl_fs_sweep.yaml — identical PPO block,
+# identical walk-forward, identical k_grid. Only memory.type differs. Any
+# performance difference between the two runs is attributable to the memory
+# mechanism, not to unrelated tuning.
+
+seeds: [0, 1, 2, 3, 4, 5, 6]
+
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+memory:
+  type: as                        # Adaptive Stacking — agent chooses slot to overwrite
+  k_grid: [3, 5, 10, 20]          # memory budget κ, matched to FS grid
+
+ppo:
+  # FIXED across the whole sweep — same values as configs/rq_rl_fs_sweep.yaml.
+  total_timesteps: 100000
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260
+  test_size: 252
+  max_windows: null

@@ -28,10 +28,13 @@ class SequenceDataset(Dataset):
 class LSTMForecaster(nn.Module):
     """Small LSTM: input sequence -> next-step return prediction."""
 
-    def __init__(self, inputsize:int =1, hiddensze:int=32, numLayers:int=1):
+    def __init__(self, inputsize:int =1, hiddensze:int=32, numLayers:int=1, dropout:float=0.0):
         super().__init__()
-        self.elestm = nn.LSTM(inputsize, hiddensze, numLayers, batch_first=True)
-        self.head = nn.Linear(hiddensze,1) # what doe sthis do ?. 
+        # nn.LSTM only applies dropout between layers when numLayers > 1
+        # (silences a warning we'd otherwise hit with numLayers=1, dropout>0)
+        effective_dropout = dropout if numLayers > 1 else 0.0
+        self.elestm = nn.LSTM(inputsize, hiddensze, numLayers, batch_first=True, dropout=effective_dropout)
+        self.head = nn.Linear(hiddensze,1) # what doe sthis do ?.
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         #x: (batch, the sequence len, input_size)
@@ -42,26 +45,53 @@ class LSTMForecaster(nn.Module):
         # (the return forecast).
         return self.head(last).squeeze(-1) # batch,
 
-def train_forecaster(model, dataset, epochs: int = 5, batchsze: int=64, learn_rate:float = 1e-3):
-    """Standard PyTorch training loop with MSE loss."""
+def train_forecaster(model, dataset, epochs: int = 5, batchsze: int = 64,
+                     learn_rate: float = 1e-3, weight_decay: float = 0.0,
+                     grad_clip: float = 0.0, verbose: bool = True):
+    """Standard PyTorch training loop with MSE loss.
 
-    load_the_data = DataLoader(dataset, batch_size=batchsze,shuffle=True ) #what does shuffling mean  ? 
-    optimF = torch.optim.Adam(model.parameters(), lr=learn_rate)
-    loss_fn = nn.MSELoss() #CREATES A MSELOSS CLASS
+    Fairness knobs:
+      weight_decay: L2 penalty on weights via Adam. 0.0 disables.
+      grad_clip:    max L2 norm for gradients. 0.0 disables. Stops occasional
+                    exploding-gradient blow-ups on noisy financial data.
+    """
 
-    # THE LOOP WE ARE NETERING 
+    load_the_data = DataLoader(dataset, batch_size=batchsze, shuffle=True)
+    optimF = torch.optim.Adam(model.parameters(), lr=learn_rate, weight_decay=weight_decay)
+    loss_fn = nn.MSELoss()
 
     for epoch in range(epochs):
         cum_loss = 0.0
         for windows, targets in load_the_data:
             optimF.zero_grad()
             predictions = model(windows)
-            loss = loss_fn(predictions, targets) # an array of our predictins vs the targets 
+            loss = loss_fn(predictions, targets)
             loss.backward()
+            if grad_clip > 0.0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimF.step()
-            cum_loss += loss.item() * len(targets) # why is it this ? 
-        print(f"epoch {epoch+1}: avg mse = {cum_loss / len(dataset):.6f}")
+            cum_loss += loss.item() * len(targets)
+        if verbose:
+            print(f"epoch {epoch+1}: avg mse = {cum_loss / len(dataset):.6f}")
     return model
+
+
+# --- fairness helpers: standardise using train-slice stats only ---
+
+def fit_standardiser(train_arr: np.ndarray) -> tuple[float, float]:
+    """Compute (mean, std) from the TRAIN slice only.
+
+    # think of this as: don't peek at the test data when deciding how to
+    # z-score. Using future stats to normalise past inputs = data leakage.
+    """
+    mean = float(train_arr.mean())
+    std = float(train_arr.std() + 1e-8)   # +eps guards against divide-by-zero on flat slices
+    return mean, std
+
+
+def apply_standardiser(arr: np.ndarray, mean: float, std: float) -> np.ndarray:
+    """Apply a pre-fit standardiser: z = (x - mean) / std."""
+    return ((arr - mean) / std).astype(np.float32)
 
 
 def predictions_to_postsions(predictions: np.ndarray, thresh:float=0.0) -> np.ndarray:
@@ -95,7 +125,7 @@ if __name__ == "__main__":
 
     torch.manual_seed(0)
 
-    obs, rets = to_env_arrays(load_aligned(), "vix_close", "sp_close")
+    obs, rets, _dates = to_env_arrays(load_aligned(), "vix_close", "sp_close")
 
     K = 5 #
 

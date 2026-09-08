@@ -26,4 +26,13 @@ tb_logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# SLURM logs — generated on the cluster, not tracked
+slurm-logs/
+slurm-*.out
+slurm-*.err
+
+# Docs / notes / slides — not needed on cluster
 *.md
+Slides/
+claude-read/

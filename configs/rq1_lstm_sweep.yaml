@@ -1,0 +1,47 @@
+# RQ1 config: STRONG LSTM baseline — HP sweep + multi-seed.
+# Run: python scripts/train_lstm.py --config configs/rq1_lstm_sweep.yaml
+#
+# Replaces the earlier weak single-run config. This is the *tuned + multi-seed*
+# LSTM that RQ1 requires to be defensible (per CLAUDE.md §7 open concern —
+# now scoped in, not scope creep).
+#
+# HP defaults informed by 2026 LSTM-for-finance literature (WebSearch):
+#   hidden 64–128 (span vs literature 128–256 upper), dropout 0.2 (standard),
+#   grad_clip 5.0 (L2-norm), seq_len 20 (~1 month), num_layers 1–2.
+# Multiple seeds ensure results aren't luck of initialisation.
+
+seeds:  [0, 1, 2, 3, 4, 5, 6]               # 3 seeds per HP combo; report mean ± std
+
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+lstm_sweep:
+  # HP grid — 4 combos × 3 seeds = 12 training runs across walk-forward windows
+  # Estimated wall-time on CPU: ~3 hours (12 runs × 31 windows × ~30s each).
+  hp_grid:
+    - {hidden_size: 64,  num_layers: 1, dropout: 0.2, seq_len: 20}
+    - {hidden_size: 64,  num_layers: 2, dropout: 0.2, seq_len: 20}
+    - {hidden_size: 128, num_layers: 1, dropout: 0.2, seq_len: 20}
+    - {hidden_size: 128, num_layers: 2, dropout: 0.2, seq_len: 20}
+
+  # Training knobs — same for every HP combo (only shape varies)
+  epochs: 15                    # slightly more than earlier (10) — modest capacity uplift
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.00001         # mild L2 regularisation
+  grad_clip: 5.0                # L2-norm threshold — literature standard
+  threshold: 0.0                # forecast > threshold ⇒ long
+  standardise: true             # z-score obs using TRAIN slice stats only
+
+walk_forward:
+  train_size: 1260              # ~5 trading years — matches RQ2 configs
+  test_size: 252                # ~1 trading year
+  max_windows: null             # null = use all 31 windows
