@@ -1,0 +1,75 @@
+{
+  "run_name": "rq1_lstm_sweep",
+  "config": {
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "device": "cpu",
+    "data": {
+      "vix_file": "vix.csv",
+      "sp_file": "sp500.csv",
+      "observation_col": "vix_close",
+      "asset_col": "sp_close"
+    },
+    "env": {
+      "transaction_cost": 0.0001
+    },
+    "lstm_sweep": {
+      "hp_grid": [
+        {
+          "hidden_size": 64,
+          "num_layers": 1,
+          "dropout": 0.2,
+          "seq_len": 20
+        },
+        {
+          "hidden_size": 64,
+          "num_layers": 2,
+          "dropout": 0.2,
+          "seq_len": 20
+        },
+        {
+          "hidden_size": 128,
+          "num_layers": 1,
+          "dropout": 0.2,
+          "seq_len": 20
+        },
+        {
+          "hidden_size": 128,
+          "num_layers": 2,
+          "dropout": 0.2,
+          "seq_len": 20
+        }
+      ],
+      "epochs": 15,
+      "batch_size": 64,
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "grad_clip": 5.0,
+      "threshold": 0.0,
+      "standardise": true
+    },
+    "walk_forward": {
+      "train_size": 1260,
+      "test_size": 252,
+      "max_windows": null
+    }
+  },
+  "data_dates_full": {
+    "start": "1990-01-03",
+    "end": "2026-06-29",
+    "n": 9188
+  },
+  "sweep_shape": {
+    "n_hp_combos": 4,
+    "n_seeds": 7
+  },
+  "per_window": [],
+  "champion": null
+}

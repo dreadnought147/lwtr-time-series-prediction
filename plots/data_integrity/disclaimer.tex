@@ -1,0 +1,120 @@
+% ============================================================================
+% Data-Integrity Disclaimer — Honours Research Project
+% "Learning What to Remember for Time-Series Prediction Using RL"
+%
+% Attach to any public release of this project's results, plots, or models.
+% Compile with: pdflatex disclaimer.tex
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}   % needed for \text{} inside math mode
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{titlesec}
+
+\titleformat{\section}{\normalfont\large\bfseries\color{black!80}}{}{0pt}{}
+
+\hypersetup{
+  colorlinks=true,
+  urlcolor=blue!60!black,
+  linkcolor=black,
+}
+
+\title{\vspace{-2cm}Data-Integrity Statement\\\large Research project: ``Learning What to Remember''\\\normalsize Author: Banele Mkhize --- Supervisor: Geraud Nangue Tasse\\\normalsize University of the Witwatersrand, Honours CS}
+\date{\today}
+
+\begin{document}
+\maketitle
+\vspace{-1cm}
+
+\section{1.\quad Statement of Non-Advisory Nature}
+
+Every number, plot, and conclusion in this project is produced for
+\textbf{academic research purposes only}. Nothing in this work constitutes
+investment advice, a trading recommendation, a solicitation to buy or sell
+any security, or guidance of any kind that a reasonable reader should act
+upon with real capital. The agents trained in this project trade a
+simulated position on a historical price series in a controlled Gymnasium
+environment and do not interact with any live market, broker, or capital
+pool.
+
+\section{2.\quad Data Source and Scope}
+
+Daily VIX ($\wedge$VIX) and S\&P~500 ($\wedge$GSPC) closing-price data were
+retrieved from \href{https://finance.yahoo.com/}{Yahoo Finance} via the
+open-source \texttt{yfinance} library. The retrieved series span 1990-01-03
+to 2026-06-29, inner-joined on shared trading days, yielding 9{,}188
+aligned daily observations across approximately 24 years of overlap.
+No alternative data feeds, premium sources, broker records, or tick-level
+microstructure data were used.
+
+Yahoo Finance provides retail-grade historical data. Historical closes may
+be revised retroactively by Yahoo for dividend adjustments, split
+corrections, or recorded data errors. A date-by-date re-fetch comparison
+script (\texttt{scripts/data\_integrity\_check.py}) is included in this
+repository to detect any drift between the project's stored CSVs and
+currently-reported Yahoo values.
+
+\section{3.\quad Deliberate Limitations}
+
+The following are known limitations of this dataset and setup, and have
+been accepted as scope boundaries:
+
+\begin{itemize}
+  \item \textbf{Frequency.} Daily closes only. No intraday microstructure,
+    order-book data, or tick-level information is incorporated.
+  \item \textbf{Asset coverage.} Two instruments only (VIX observation
+    stream, S\&P~500 traded underlying). Not a portfolio-level study.
+  \item \textbf{Transaction cost model.} A simplified fixed per-flip cost
+    (1 basis point) is applied. Real-world costs vary with venue,
+    position size, slippage, borrow fees, and taxation --- none of which
+    are modelled.
+  \item \textbf{No live trading.} Agents operate strictly against
+    historical replay. No forward evaluation, paper trading, or live
+    broker interaction has been conducted.
+  \item \textbf{Reward shaping.} Reward is defined as
+    $\text{position} \times \text{next-day log-return} - c \cdot
+    |\Delta\text{position}|$. This is a research simplification; it does
+    not model account constraints, margin, risk limits, or regulatory
+    rules governing retail or institutional trading.
+\end{itemize}
+
+\section{4.\quad Reproducibility and Auditability}
+
+The following steps are included in the repository to allow independent
+auditors or examiners to verify data integrity:
+
+\begin{itemize}
+  \item \texttt{scripts/downlaod\_data.py} re-downloads the raw CSVs from
+    Yahoo Finance using the same \texttt{yfinance} API call used
+    originally.
+  \item \texttt{scripts/data\_integrity\_check.py} compares the current
+    local CSVs against a freshly-fetched copy and reports any divergence.
+  \item \texttt{plots/data\_integrity/stats\_report.txt} records
+    descriptive statistics (mean, std, skewness, kurtosis, autocorrelation,
+    rolling-window stationarity visual) on the log-returns used for
+    training.
+  \item Walk-forward evaluation is applied: each window retrains a fresh
+    model only on data strictly prior to its test slice. No test-set
+    observation participates in training for its own window.
+  \item Per-window standardisation statistics are computed from each
+    training slice only, never the full dataset.
+\end{itemize}
+
+\section{5.\quad Author Attestation}
+
+I, Banele Mkhize, attest that the data used in this project was obtained
+through the public yfinance library, has not been altered beyond the
+documented log-return transformation and date alignment, and that no
+confidential, insider, or restricted data of any kind has been
+incorporated. All code, configuration, and results in the project
+repository (\texttt{lwtr-time-series-prediction}) are available for
+inspection by my supervisor, external examiners, and the School of
+Computer Science \& Applied Mathematics.
+
+\vspace{1cm}
+\noindent\textit{This document is a working-draft disclaimer accompanying
+the Honours research project. The final submitted thesis will contain the
+formal ethics statement and reproducibility annex required by the School.}
+
+\end{document}

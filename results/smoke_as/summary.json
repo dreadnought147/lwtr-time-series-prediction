@@ -1,0 +1,174 @@
+{
+  "run_name": "smoke_as",
+  "config": {
+    "seed": 0,
+    "device": "cpu",
+    "data": {
+      "vix_file": "vix.csv",
+      "sp_file": "sp500.csv",
+      "observation_col": "vix_close",
+      "asset_col": "sp_close"
+    },
+    "env": {
+      "transaction_cost": 0.0001
+    },
+    "memory": {
+      "type": "as",
+      "k": 5
+    },
+    "ppo": {
+      "total_timesteps": 2000,
+      "n_steps": 256,
+      "batch_size": 64,
+      "learning_rate": 0.0003
+    },
+    "walk_forward": {
+      "train_size": 200,
+      "test_size": 50,
+      "max_windows": 2
+    }
+  },
+  "data_dates_full": {
+    "start": "1990-01-03",
+    "end": "2026-06-29",
+    "n": 9188
+  },
+  "per_window": [
+    {
+      "window_index": 0,
+      "dates": {
+        "train_start": "1990-01-03",
+        "train_end": "1990-10-16",
+        "test_start": "1990-10-17",
+        "test_end": "1990-12-27"
+      },
+      "sizes": {
+        "train": 200,
+        "test": 50
+      },
+      "training": {
+        "total_timesteps": 2000,
+        "wall_seconds": 4.18
+      },
+      "agent_test": {
+        "n_steps": 50,
+        "metrics": {
+          "cumulative_return": -0.09566571819121017,
+          "sharpe_ratio": -3.117468170702542,
+          "max_drawdown": 0.09003766381567965
+        },
+        "positions": {
+          "n_long": 0,
+          "n_flat": 0,
+          "n_short": 50,
+          "n_flips": 0
+        },
+        "memory_action_counts": [
+          0,
+          0,
+          0,
+          50,
+          0
+        ]
+      },
+      "buy_and_hold_test": {
+        "n_steps": 50,
+        "metrics": {
+          "cumulative_return": 0.09556571819121018,
+          "sharpe_ratio": 3.115632029719243,
+          "max_drawdown": 0.040920081558542015
+        }
+      }
+    },
+    {
+      "window_index": 1,
+      "dates": {
+        "train_start": "1990-03-15",
+        "train_end": "1990-12-27",
+        "test_start": "1990-12-28",
+        "test_end": "1991-03-11"
+      },
+      "sizes": {
+        "train": 200,
+        "test": 50
+      },
+      "training": {
+        "total_timesteps": 2000,
+        "wall_seconds": 4.41
+      },
+      "agent_test": {
+        "n_steps": 50,
+        "metrics": {
+          "cumulative_return": -0.11847775298045016,
+          "sharpe_ratio": -3.435033040339171,
+          "max_drawdown": 0.17315250369323287
+        },
+        "positions": {
+          "n_long": 0,
+          "n_flat": 0,
+          "n_short": 50,
+          "n_flips": 0
+        },
+        "memory_action_counts": [
+          0,
+          50,
+          0,
+          0,
+          0
+        ]
+      },
+      "buy_and_hold_test": {
+        "n_steps": 50,
+        "metrics": {
+          "cumulative_return": 0.11837775298045017,
+          "sharpe_ratio": 3.4322642447604474,
+          "max_drawdown": 0.056719796114949594
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "n_windows": 2,
+    "agent": {
+      "sharpe_ratio": {
+        "mean": -3.2762506055208567,
+        "std": 0.22455227278668222
+      },
+      "cumulative_return": {
+        "mean": -0.10707173558583016,
+        "std": 0.01613054449213503
+      },
+      "max_drawdown": {
+        "mean": 0.13159508375445628,
+        "std": 0.05877106689465196
+      }
+    },
+    "buy_and_hold": {
+      "sharpe_ratio": {
+        "mean": 3.273948137239845,
+        "std": 0.22389278639775295
+      },
+      "cumulative_return": {
+        "mean": 0.10697173558583017,
+        "std": 0.01613054449213503
+      },
+      "max_drawdown": {
+        "mean": 0.048819938836745805,
+        "std": 0.011172085303647604
+      }
+    },
+    "agent_positions_total": {
+      "n_long": 0,
+      "n_flat": 0,
+      "n_short": 100,
+      "n_flips": 0
+    },
+    "agent_memory_action_counts_total": [
+      0,
+      50,
+      0,
+      50,
+      0
+    ]
+  }
+}

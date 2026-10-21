@@ -1,0 +1,16 @@
+@everyone Reminder for the meeting now. MSL110. I’ve no laptop with me, so in person only.
+Geraud — 1:50 pm
+@everyone I see no one could make it for the meeting today. 
+
+Please let me know in advance when you can’t make meetings, and drop updates on your respective discord channels. Unfortunately, a lot of you are very behind on your projects, and your project reports deadline is fast approaching.
+Please create an overleaf project for your reports, using either the IEEE conference latex template, or the GECCO one (for those doing evolutionary algorithms). Then share that overleaf project with me.
+The innovation day where you present your works as posters is fast approaching (around end of October). Have you all registered for it? It’s a great opportunity to present your research to other students, faculty, invited industry professionals, and stand the chance to win prices.
+wallnutty. — 1:54 pm
+I havent registered. I thought we had an innovation day like later in November. Is this different?  🤔 
+Geraud — 2:04 pm
+I know there’s one end of October,  but maybe it’s a different one. Please double check the dates with Helen.
+Geraud — 2:55 pm
+@everyone I'm meeting with @wallnutty. on Thursday 3pm-3:30pm. I will be free after it from 3:30pm-4pm if anyone else wants to meet. Please make max 10 mins presentations to go through your method details and results when we meet (whether it is on Thursday or Monday)
+
+
+

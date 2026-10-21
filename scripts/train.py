@@ -47,6 +47,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.logger import configure as sb3_configure_logger
 
@@ -72,13 +73,76 @@ def build_memory_wrapper(env, memory_type: str, k: int):
     raise ValueError(f"Unknown memory_type: {memory_type!r}")
 
 
+def build_model(cfg: dict, env, seed: int, n_steps: int, batch_size: int,
+                learning_rate: float, total_timesteps: int):
+    """Instantiate the agent the config asks for.
+
+    policy.type == "mlp"  -> PPO + MlpPolicy        (the original sweeps)
+    policy.type == "lstm" -> RecurrentPPO + MlpLstmPolicy
+
+    Everything outside the policy — the PPO hyperparameters, the env, the
+    wrapper, the walk-forward split, the seeding — is identical either way.
+    That is the point: it is the only way a difference between the two arms can
+    be attributed to the architecture rather than to the rest of the setup.
+    """
+    pol = cfg.get("policy", {}) or {}
+    ptype = pol.get("type", "mlp")
+
+    common = dict(
+        env=env, verbose=0, seed=seed, device=cfg.get("device", "cpu"),
+        n_steps=n_steps, batch_size=batch_size, learning_rate=learning_rate,
+    )
+
+    if ptype == "mlp":
+        return PPO("MlpPolicy", **common)
+
+    if ptype == "lstm":
+        # Shape is NOT swept here. It is copied from the supervised LSTM
+        # baseline's champion so the RL arm competes on the baseline's own best
+        # settings — the supervisor's explicit instruction, because winning on
+        # the baseline's chosen shape is the fair and sufficient result.
+        policy_kwargs = {
+            "lstm_hidden_size": int(pol.get("lstm_hidden_size", 128)),
+            "n_lstm_layers": int(pol.get("n_lstm_layers", 1)),
+            # shared_lstm=True  -> one LSTM feeding both actor and critic
+            # shared_lstm=False -> actor and critic each get their own
+            # This is the "two LSTM implementations" choice; both are run and
+            # compared rather than one being assumed.
+            "shared_lstm": bool(pol.get("shared_lstm", False)),
+            "enable_critic_lstm": bool(pol.get("enable_critic_lstm", True)),
+        }
+        # nn.LSTM applies dropout only between layers, so at n_lstm_layers=1 it
+        # is a no-op — same behaviour as the supervised baseline's own guard.
+        dropout = float(pol.get("dropout", 0.0))
+        if dropout > 0.0 and policy_kwargs["n_lstm_layers"] > 1:
+            policy_kwargs["lstm_kwargs"] = {"dropout": dropout}
+        return RecurrentPPO("MlpLstmPolicy", policy_kwargs=policy_kwargs, **common)
+
+    raise ValueError(f"Unknown policy.type: {ptype!r} (expected 'mlp' or 'lstm')")
+
+
 def rollout(model, env) -> dict:
-    """Replay the test period once with the trained policy, collect per-day details."""
+    """Replay the test period once with the trained policy, collect per-day details.
+
+    A recurrent policy carries hidden state between steps, so it needs that state
+    threaded through predict() and needs to be told where the episode started.
+    A feed-forward policy ignores both. Detected from the model rather than
+    passed in, so the caller does not have to know which it has.
+    """
     obs, _ = env.reset()
     rewards, positions, memory_actions = [], [], []
+    recurrent = isinstance(model, RecurrentPPO)
+    lstm_states = None
+    episode_start = np.ones((1,), dtype=bool)
     done = False
     while not done:
-        action, _ = model.predict(obs, deterministic=True)
+        if recurrent:
+            action, lstm_states = model.predict(
+                obs, state=lstm_states, episode_start=episode_start, deterministic=True
+            )
+            episode_start = np.zeros((1,), dtype=bool)
+        else:
+            action, _ = model.predict(obs, deterministic=True)
         obs, reward, terminated, truncated, info = env.step(action)
         rewards.append(float(reward))
         positions.append(int(info.get("position", 0)))
@@ -236,8 +300,15 @@ def main():
     batch_size = int(ppo_cfg.get("batch_size", 64))
     learning_rate = float(ppo_cfg.get("learning_rate", 3e-4))
 
-    print(f"[{run_name}] sweep: memory={memory_type}, k_grid={k_grid}, seeds={seeds} "
+    policy_cfg = cfg.get("policy", {}) or {}
+    policy_type = policy_cfg.get("type", "mlp")
+    print(f"[{run_name}] sweep: policy={policy_type}, memory={memory_type}, "
+          f"k_grid={k_grid}, seeds={seeds} "
           f"→ {len(k_grid) * len(seeds)} (k, seed) combos across walk-forward windows")
+    if policy_type == "lstm":
+        print(f"[{run_name}] lstm policy: hidden={policy_cfg.get('lstm_hidden_size', 128)}, "
+              f"layers={policy_cfg.get('n_lstm_layers', 1)}, "
+              f"shared_lstm={policy_cfg.get('shared_lstm', False)}")
 
     # ---- CSV paths + resume ----
     windows_csv_path = results_dir / "windows.csv"
@@ -297,15 +368,12 @@ def main():
                     )
                     train_env = build_memory_wrapper(train_env, memory_type, k)
 
-                    model = PPO(
-                        "MlpPolicy",
-                        train_env,
-                        verbose=0,
-                        seed=seed,
-                        device=cfg.get("device", "cpu"),
+                    model = build_model(
+                        cfg, train_env, seed,
                         n_steps=n_steps,
                         batch_size=batch_size,
                         learning_rate=learning_rate,
+                        total_timesteps=total_timesteps,
                     )
 
                     # SB3 training-curve capture — writes progress.csv into
@@ -455,7 +523,8 @@ def main():
         "run_name": run_name,
         "config": cfg,
         "data_dates_full": {"start": str(dates[0].date()), "end": str(dates[-1].date()), "n": int(n)},
-        "sweep_shape": {"memory_type": memory_type, "k_grid": k_grid, "seeds": seeds},
+        "sweep_shape": {"memory_type": memory_type, "k_grid": k_grid, "seeds": seeds,
+                        "policy_type": policy_type},
         "per_window": per_window_records,
         "champion": champion_info,
     }

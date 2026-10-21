@@ -1,0 +1,72 @@
+# RQ1 (architecture) — PPO + Frame Stacking with an LSTM policy, k = 3, 7 seeds.
+#
+# Run: python scripts/train.py --config configs/rq_rl_fs_lstm_sweep.yaml
+#
+# WHY THIS RUN EXISTS
+# -------------------
+# The supervised baseline is an LSTM; the RL agents so far are MLPs. Comparing
+# them changes two things at once — the learning paradigm AND the architecture —
+# so a win could be attributed to either. This arm holds the architecture fixed
+# so the remaining difference is the paradigm alone.
+#
+# Pairs with configs/rq_rl_as_lstm_sweep.yaml, which is identical except for
+# memory.type. Do not change the ppo or policy block in one without the other.
+#
+# WHY NO HYPERPARAMETER SWEEP
+# ---------------------------
+# The LSTM shape is copied from the supervised baseline's champion (hp_id 2:
+# hidden 128, 1 layer). Supervisor's instruction, and his reasoning: beating the
+# baseline on the baseline's own best settings is the fair and sufficient
+# result. Sweeping here would only move the comparison in our favour.
+#
+# WHY k = 3 AND NOT THE FULL GRID
+# -------------------------------
+# The memory-budget sweep is already answered by the MLP arms. This run answers
+# the architecture question, which needs one budget, not four. k=3 is the FS
+# champion from the complete-data record (mean Sharpe 0.484).
+#
+# COST
+# ----
+# n_k x n_seeds x 31 windows = 1 x 7 x 31 = 217 windows. RecurrentPPO cannot
+# flatten its rollout, so budget roughly ten times an MLP window.
+#
+# The loop order is k -> seed -> window, so an early stop leaves COMPLETE seeds
+# across all 31 windows rather than partial windows. If this has to be cut
+# short, report however many whole seeds finished and say so.
+
+seeds: [0, 1, 2, 3, 4, 5, 6]      # same 7 seeds as the MLP arms, for comparability
+
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+policy:
+  type: lstm                      # RecurrentPPO + MlpLstmPolicy
+  lstm_hidden_size: 128           # supervised champion hp_id 2
+  n_lstm_layers: 1                # supervised champion hp_id 2
+  shared_lstm: false              # actor and critic each get their own LSTM
+  enable_critic_lstm: true
+
+memory:
+  type: fs                        # Frame Stacking
+  k_grid: [3]                     # FS champion budget
+
+ppo:
+  # IDENTICAL to configs/rq_rl_fs_sweep.yaml, so the only difference between
+  # this run and the MLP run is the policy architecture.
+  total_timesteps: 100000
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260
+  test_size: 252
+  max_windows: null

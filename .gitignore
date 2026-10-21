@@ -1,3 +1,9 @@
+# The rule here: anything that cannot be regenerated gets tracked.
+# Source data, notes, decisions and sweep outputs are all irreplaceable —
+# Yahoo Finance revises its series, and the sweeps cost days of CPU.
+# Only caches, environments and build artefacts are excluded.
+# Whole repo is ~76MB tracked, which is well inside GitHub's limits.
+
 .venv/
 __pycache__/
 *.pyc
@@ -5,34 +11,46 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 
-data/raw/*.csv
-data/processed/*.csv
-data/raw/*.parquet
-data/processed/*.parquet
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-
-results/
-runs/
-wandb/
-tb_logs/
-*.log
-*.zip
-*.pt
-*.pkl
-!results/.gitkeep
-
+# Environments and editors
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# SLURM logs — generated on the cluster, not tracked
+# Training scratch — regenerable, or vendor-specific
+runs/
+wandb/
+tb_logs/
+*.log
 slurm-logs/
 slurm-*.out
 slurm-*.err
 
-# Docs / notes / slides — not needed on cluster
-*.md
-Slides/
-claude-read/
+# Model checkpoints — large, and reproducible from the configs + seeds
+*.pt
+*.pkl
+*.zip
+
+# LaTeX build output
+**/build/
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.out
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+
+# --- Deliberately TRACKED, listed here so the reason is on record ---
+# data/raw/*.csv        source VIX + S&P, 1.9MB. Yahoo re-downloads are not
+#                       byte-identical, so this is the only provenance record.
+# results/              windows.csv, steps.csv, summary.json, training curves.
+#                       60MB, and the only alternative to 2.7 days of retraining.
+# *.md                  decisions log, research log, handoff, to-do, journey.
+#                       The project's reasoning lives here and nowhere else.
+# claude-read/          project context and standing instructions.
+# takeoff/, defence/    deck, speaker notes, defence guide.
+# plots/                generated, but cheap to keep and useful in history.

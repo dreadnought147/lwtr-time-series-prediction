@@ -1,0 +1,2 @@
+run_id,memory_type,k,seed,window_index,train_start_date,train_end_date,train_days,test_start_date,test_end_date,test_days,total_timesteps,train_wall_seconds,agent_sharpe,agent_cumret,agent_maxdd,bh_sharpe,bh_cumret,bh_maxdd,pos_long,pos_flat,pos_short,pos_flips,mem_slot_0,mem_slot_1,mem_slot_2
+fs_k3_seed0,fs,3,0,0,1990-01-03,1994-12-23,1260,1994-12-27,1995-12-22,252,10000,63.42,3.626156,0.283802,0.025334,3.627711,0.283902,0.025334,252,0,0,0,,,

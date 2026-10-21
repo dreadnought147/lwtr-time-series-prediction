@@ -1,0 +1,145 @@
+{
+  "run_name": "probe_rl_lstm",
+  "config": {
+    "seeds": [
+      0
+    ],
+    "device": "cpu",
+    "data": {
+      "vix_file": "vix.csv",
+      "sp_file": "sp500.csv",
+      "observation_col": "vix_close",
+      "asset_col": "sp_close"
+    },
+    "env": {
+      "transaction_cost": 0.0001
+    },
+    "policy": {
+      "type": "lstm",
+      "lstm_hidden_size": 128,
+      "n_lstm_layers": 1,
+      "shared_lstm": false,
+      "enable_critic_lstm": true
+    },
+    "memory": {
+      "type": "fs",
+      "k_grid": [
+        3
+      ]
+    },
+    "ppo": {
+      "total_timesteps": 10000,
+      "n_steps": 2048,
+      "batch_size": 64,
+      "learning_rate": 0.0003
+    },
+    "walk_forward": {
+      "train_size": 1260,
+      "test_size": 252,
+      "max_windows": 1
+    }
+  },
+  "data_dates_full": {
+    "start": "1990-01-03",
+    "end": "2026-06-29",
+    "n": 9188
+  },
+  "sweep_shape": {
+    "memory_type": "fs",
+    "k_grid": [
+      3
+    ],
+    "seeds": [
+      0
+    ],
+    "policy_type": "lstm"
+  },
+  "per_window": [
+    {
+      "run_id": "fs_k3_seed0",
+      "memory_type": "fs",
+      "k": 3,
+      "seed": 0,
+      "window_index": 0,
+      "dates": {
+        "train_start": "1990-01-03",
+        "train_end": "1994-12-23",
+        "test_start": "1994-12-27",
+        "test_end": "1995-12-22"
+      },
+      "sizes": {
+        "train": 1260,
+        "test": 252
+      },
+      "training": {
+        "total_timesteps": 10000,
+        "wall_seconds": 63.42,
+        "curves_path": "training_curves\\w0_k3_s0"
+      },
+      "agent_test": {
+        "n_steps": 252,
+        "metrics": {
+          "cumulative_return": 0.28380169729573246,
+          "sharpe_ratio": 3.626155854750206,
+          "max_drawdown": 0.02533416935230491
+        },
+        "positions": {
+          "n_long": 252,
+          "n_flat": 0,
+          "n_short": 0,
+          "n_flips": 0
+        }
+      },
+      "buy_and_hold_test": {
+        "n_steps": 252,
+        "metrics": {
+          "cumulative_return": 0.28390169729573245,
+          "sharpe_ratio": 3.627710881566228,
+          "max_drawdown": 0.025334169352305
+        }
+      }
+    }
+  ],
+  "champion": {
+    "ranking_by_sharpe_mean": [
+      {
+        "k": 3,
+        "seeds": [
+          0
+        ],
+        "n_windows_total": 1,
+        "sharpe": {
+          "mean": 3.626155854750206,
+          "std": 0.0
+        },
+        "cumret": {
+          "mean": 0.28380169729573246,
+          "std": 0.0
+        },
+        "maxdd": {
+          "mean": 0.02533416935230491,
+          "std": 0.0
+        }
+      }
+    ],
+    "champion": {
+      "k": 3,
+      "seeds": [
+        0
+      ],
+      "n_windows_total": 1,
+      "sharpe": {
+        "mean": 3.626155854750206,
+        "std": 0.0
+      },
+      "cumret": {
+        "mean": 0.28380169729573246,
+        "std": 0.0
+      },
+      "maxdd": {
+        "mean": 0.02533416935230491,
+        "std": 0.0
+      }
+    }
+  }
+}

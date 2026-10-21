@@ -261,5 +261,162 @@ cluster dispatch as soon as (1) confirms the RQ1 shape is right.
 (4) can be done in parallel with (3) since it's small and CPU-only.
 
 
+===========================================================
+2026-09-03 — RQ1 strong LSTM baseline (sweep-native, multi-seed)
+===========================================================
+
+The RQ1 supervised baseline is a tuned, multi-seed LSTM sweep. This is
+what the proposal commits to and what a defensible RQ1 comparison
+requires. (An earlier iteration went through a simpler single-config
+form during pipeline bring-up; superseded here.)
+
+What's in the strong baseline:
+- src/baselines/lstm.py — training loop gained weight_decay, grad_clip,
+  verbose flags; new fit_standardiser / apply_standardiser helpers for
+  per-window z-scoring using TRAIN-slice stats only (no test leakage).
+- scripts/train_lstm.py — sweep runner. Config specifies an HP grid +
+  list of seeds; for each (hp_id, seed, walk-forward window) triplet a
+  fresh model is trained from scratch and evaluated on the test slice.
+  Same CSV+JSON+resume design as train.py; adds hp_id / seed / run_id
+  columns. summary.json ends with a "champion" section identifying the
+  best HP combo by mean Sharpe across seeds — the RQ1 baseline number.
+- configs/rq1_lstm_sweep.yaml — 4 HP combos × 3 seeds = 12 runs across
+  31 walk-forward windows. Estimated ~3 hours on CPU.
+
+HP grid choice (informed by WebSearch on 2026-09-03 for LSTM-for-finance
+best practices):
+- hidden_size ∈ {64, 128}   — spans a range that includes the low end of
+                                literature-recommended 128–256 for financial
+                                forecasting.
+- num_layers ∈ {1, 2}       — 1–2 is the practical standard.
+- dropout = 0.2              — the most-cited compromise between overfit
+                                and accuracy (0.1 too weak, >0.3 hurts).
+- seq_len = 20               — ~1 trading month; consistent with common
+                                VIX-window practice. seq_len swept later
+                                if the champion warrants it.
+- grad_clip = 5.0            — L2-norm threshold per literature standard.
+                                Previous default of 1.0 was too aggressive.
+- weight_decay = 1e-5        — mild L2 regularisation via Adam.
+- epochs = 15                — modest uplift from earlier 10.
+- standardise = true         — z-score using train-slice stats only.
+
+Fairness items addressed:
+- ✔ Multiple seeds per HP combo, results reported with spread.
+- ✔ Per-window standardisation, fit on train slice only.
+- ✔ Gradient clipping.
+- ✔ Weight decay.
+- ✔ HP comparison across a small grid.
+- ✗ Still no validation-slice early stopping — deferred; would require
+   splitting each 1260-day train slice, and 15 epochs on 1260 samples
+   isn't at overfit risk yet.
+- ✗ No final-2-year holdout enforced in code yet (CLAUDE.md §3 rule).
+   Standing open item; applies to RQ2 too. To be added before final runs.
+
+Sources (WebSearch, 2026-09-03):
+- https://link.springer.com/article/10.1007/s42521-025-00173-0
+- https://www.jatit.org/volumes/Vol102No24/8Vol102No24.pdf
+- https://www.sciencedirect.com/science/article/pii/S219985312400252X
+- https://link.springer.com/article/10.1007/s00521-026-12369-5
+- https://hiya31.medium.com/a-guide-to-lstm-hyperparameter-tuning-for-optimal-model-training-064f5c7f099d
+- https://discuss.pytorch.org/t/about-gradients-and-gradient-clipping-on-lstm/131332
+
+Ready to train. Command:
+    python scripts/train_lstm.py --config configs/rq1_lstm_sweep.yaml
+
+Outputs to results/rq1_lstm_sweep/ — windows.csv, steps.csv, summary.json.
+
+
+===========================================================
+2026-09-08 — Seed count sanity check + plot output convention
+===========================================================
+
+Standard practice for random-seed count in SL/ML experiments
+(WebSearch, 2026-09-08):
+- Bare minimum for reportable results:      5 seeds
+- Safer for defensibility / small variance: 7-10 seeds
+- Deep-RL papers historically used 5 or fewer, which has been
+  criticised as underpowered; 10 is now the common recommendation
+- Prototyping only:                          3 seeds (or fewer)
+
+Sources:
+- https://arxiv.org/pdf/1806.08295  (How Many Random Seeds? deep RL)
+- https://arxiv.org/pdf/2406.14325  (Reproducibility in ML research)
+
+Decision — LSTM sweep:
+- The initial run used 3 seeds (prototyping — pipeline shakedown).
+- Next run uses 7 seeds (comfortably inside the 5-10 defensible band).
+- If asked "why 7?": "5-10 is standard for SL ML, started at 3 for
+  prototyping, bumped to 7 for the reportable version" — clean answer.
+
+How the seed bump is done (no waste):
+- Edit configs/rq1_lstm_sweep.yaml to seeds: [0, 1, 2, 3, 4, 5, 6]
+- Rerun the same command. train_lstm.py's resume logic already skips
+  (hp_id, seed, window) triplets already on disk, so only seeds 3-6
+  get freshly trained; seeds 0-2 are reused as-is.
+- No deletion, no rework. Efficient and reproducible.
+
+Plot output convention (going forward):
+- Plots for a given seed-count checkpoint go in a subfolder named
+  seed_N under the run's results directory. Example:
+      results/rq1_lstm_sweep/seed_3/
+      results/rq1_lstm_sweep/seed_7/
+- Both subfolders coexist as separate historical snapshots.
+- No README next to the plots — the sweep YAML already documents the
+  exact HP grid, seed list, and walk-forward sizes; a README would
+  double-document.
+
+Taboo clarification (asked during this session):
+- The ML taboo the user was half-remembering is "data leakage" or
+  "test-set peeking" — using test-set numbers to DECIDE what to train
+  (e.g. selecting hyperparameters after seeing test performance).
+- Rerunning a fresh sweep with more seeds is NOT that. Champion
+  selection by mean Sharpe across seeds happens AFTER training and
+  aggregates ALL seeds, not a cherry-picked subset.
+- The current setup (walk-forward splits, per-window normalisation
+  using train-slice stats only, HP champion by mean-across-seeds) is
+  already leakage-clean.
+
+
+===========================================================
+2026-09-08 — LSTM sweep plotting: what, why, how
+===========================================================
+
+Built scripts/plot_lstm_sweep.py — turns a sweep run's windows.csv
+into the standard set of SL/ML evaluation plots.
+
+What gets produced (per seed-count snapshot):
+- results/{run_dir}/seed_{N}/hp_{i}_sharpe_timeline.png
+    Per HP shape: Sharpe across walk-forward windows.
+    Median line across seeds + min-max shaded band + B&H dashed ref.
+    Shows time-varying performance AND seed sensitivity in one panel.
+- results/{run_dir}/seed_{N}/hp_{i}_cumret_timeline.png
+    Same shape but for cumulative return.
+- results/{run_dir}/seed_{N}/aggregate_sharpe_by_hp.png
+    Bar chart with error bars — mean Sharpe per HP shape, aggregated
+    over seeds x windows. Champion (tallest bar) highlighted in green.
+    Horizontal dashed line = B&H reference.
+
+Why these two families:
+- Per-config metric-timeline with median + seed-spread band is the
+  textbook fair-baseline plot for time-series ML — shows both when the
+  model did well and how spread the seeds were.
+- Aggregate bar-with-error-bars is the between-config comparison a
+  reviewer would want to see for champion selection.
+- Sparse on purpose — the LSTM baseline is a control for RQ1, not the
+  research focus, so no ROC/confusion-matrix/threshold curves etc.
+
+Convention going forward:
+- Plots for the N-seed snapshot live under seed_{N}/ so future reruns
+  (seed_7, seed_10, etc.) coexist as separate historical snapshots.
+- No README next to the plots — the sweep YAML is the config docs.
+
+Commands:
+    python scripts/plot_lstm_sweep.py --run-dir results/rq1_lstm_sweep --seeds 3
+    python scripts/plot_lstm_sweep.py --run-dir results/rq1_lstm_sweep --seeds 7
+
+
+
+
+
 
 

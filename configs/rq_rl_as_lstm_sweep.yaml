@@ -1,0 +1,64 @@
+# RQ2 (mechanism, at LSTM architecture) — PPO + Adaptive Stacking with an LSTM
+# policy, κ = 3, 7 seeds.
+#
+# Run: python scripts/train.py --config configs/rq_rl_as_lstm_sweep.yaml
+#
+# WHY THIS RUN EXISTS
+# -------------------
+# Matched-budget pair with configs/rq_rl_fs_lstm_sweep.yaml. Identical in every
+# field except memory.type. Two things come out of the pair:
+#   1. with FS: the architecture comparison against the supervised LSTM (RQ1)
+#   2. FS vs AS at the same k: whether the RQ2 null result survives a change of
+#      architecture, or whether it was an artefact of the MLP policy
+#
+# The second is the one worth stating plainly: the MLP arms found no detectable
+# difference between AS and FS. If that holds with an LSTM policy too, the null
+# is about the mechanism rather than about the network it was wired into.
+#
+# Do not change the ppo or policy block here without changing the FS file.
+#
+# NOTE ON WHAT IS NOT MATCHED
+# ---------------------------
+# AS still carries an extra action head — MultiDiscrete([3, k]) against FS's
+# Discrete(3) — at the same 100k timesteps. That was true of the MLP arms too
+# and is a known limitation, not something this run fixes.
+#
+# COST
+# ----
+# Same as the FS arm: 1 x 7 x 31 = 217 windows. Run the FS arm FIRST — it
+# answers RQ1 on its own, so if time runs out there is still a deliverable.
+
+seeds: [0, 1, 2, 3, 4, 5, 6]
+
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+policy:
+  type: lstm
+  lstm_hidden_size: 128
+  n_lstm_layers: 1
+  shared_lstm: false
+  enable_critic_lstm: true
+
+memory:
+  type: as                        # Adaptive Stacking
+  k_grid: [3]                     # matched to the FS LSTM arm
+
+ppo:
+  total_timesteps: 100000
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260
+  test_size: 252
+  max_windows: null

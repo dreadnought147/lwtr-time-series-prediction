@@ -1,0 +1,3 @@
+window_index,train_start_date,train_end_date,train_days,test_start_date,test_end_date,test_days,total_timesteps,train_wall_seconds,agent_sharpe,agent_cumret,agent_maxdd,bh_sharpe,bh_cumret,bh_maxdd,pos_long,pos_flat,pos_short,pos_flips,mem_slot_0,mem_slot_1,mem_slot_2,mem_slot_3,mem_slot_4
+0,1990-01-03,1990-10-16,200,1990-10-17,1990-12-27,50,2000,3.02,-4.229536,-0.120331,0.108283,3.115632,0.095566,0.04092,0,12,38,18,,,,,
+1,1990-03-15,1990-12-27,200,1990-12-28,1991-03-11,50,2000,3.15,2.624546,0.07536,0.052802,3.432264,0.118378,0.05672,33,15,2,29,,,,,

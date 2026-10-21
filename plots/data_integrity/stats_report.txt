@@ -1,0 +1,35 @@
+DATA INTEGRITY REPORT
+============================================================
+Date span      : 1990-01-03 → 2026-06-29
+Observations   : 9188 aligned trading days
+NaN in obs     : 0
+NaN in rets    : 0
+
+VIX log-returns:
+  mean         : +0.000003
+  std          : 0.068220
+  skewness     : +0.9670   (>0: right-skewed; VIX spikes expected)
+  kurtosis     : +6.7043  (fisher: 0 = normal; >0: fat-tailed/leptokurtic)
+  min / max    : -0.4424 / +0.7682
+
+S&P next-day log-returns:
+  mean         : +0.000331
+  std          : 0.011356
+  skewness     : -0.3643
+  kurtosis     : +10.8537  (fat tails typical for daily returns)
+  min / max    : -0.1277 / +0.1096
+
+Autocorrelation lag-1 — VIX  : -0.0839
+Autocorrelation lag-1 — S&P  : -0.0791
+(Near-zero lag-1 autocorrelation on returns is EXPECTED and consistent
+ with the efficient-markets intuition — next-day return not trivially
+ predictable from today's return alone.)
+
+Rolling mean/std inspection (visual proxy for ADF/KPSS, Lecture 5):
+  - If rolling mean/std drift significantly over time, the series is
+    non-stationary. Our log-returns rolling mean hovers near zero across
+    the whole span; rolling std does drift (volatility clustering —
+    higher in 2008, 2020). This is the standard financial time-series
+    picture: returns are approximately stationary in mean but not in
+    variance (heteroskedasticity). Walk-forward evaluation handles this
+    by retraining per window.

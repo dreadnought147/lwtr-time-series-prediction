@@ -1,0 +1,50 @@
+# TIMING PROBE — not a result. One window, one seed, 1/10th the timesteps.
+#
+# Purpose: measure what a RecurrentPPO (LSTM policy) window costs on this
+# machine before committing to a full sweep. RecurrentPPO is substantially
+# slower than PPO because it cannot flatten the rollout — it has to replay
+# sequences in order to carry hidden state.
+#
+# Multiply the reported `train Ns` by 10 to estimate a real 100k-step window,
+# then by (k values x seeds x 31 windows) for the sweep.
+#
+# Run:
+#   python scripts/train.py --config configs/probe_rl_lstm.yaml
+#
+# Writes to results/probe_rl_lstm/ — delete that directory before re-probing,
+# or the resume logic will skip the window and report nothing.
+
+seeds: [0]
+
+device: cpu
+
+data:
+  vix_file: vix.csv
+  sp_file: sp500.csv
+  observation_col: vix_close
+  asset_col: sp_close
+
+env:
+  transaction_cost: 0.0001
+
+policy:
+  type: lstm                    # RecurrentPPO + MlpLstmPolicy
+  lstm_hidden_size: 128         # copied from the supervised champion (hp_id 2)
+  n_lstm_layers: 1              # copied from the supervised champion
+  shared_lstm: false            # actor and critic each get their own LSTM
+  enable_critic_lstm: true
+
+memory:
+  type: fs
+  k_grid: [3]
+
+ppo:
+  total_timesteps: 10000        # 1/10th of the real budget — probe only
+  n_steps: 2048
+  batch_size: 64
+  learning_rate: 0.0003
+
+walk_forward:
+  train_size: 1260
+  test_size: 252
+  max_windows: 1
